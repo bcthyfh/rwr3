@@ -179,6 +179,9 @@ if (process.env.MIRROR_SOURCE_PASSWORD !== undefined) {
 if (process.env.MIRROR_SOURCE_GUILDS !== undefined) {
   config.mirrorEngine.sourceGuildIds = process.env.MIRROR_SOURCE_GUILDS.split(',').map(id => id.trim()).filter(Boolean);
 }
+if (process.env.MIRROR_MAX_MESSAGES_PER_CHANNEL !== undefined) {
+  config.mirrorEngine.maxMessagesPerChannel = parseInt(process.env.MIRROR_MAX_MESSAGES_PER_CHANNEL, 10) || 100;
+}
 
 
 // ── Folder paths ───────────────────────────────────────────────────────────────
