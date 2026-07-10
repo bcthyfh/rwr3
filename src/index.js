@@ -67,7 +67,78 @@ const { sleep, retryWithBackoff } = require('./utils/retry');
 
 // ── Config ─────────────────────────────────────────────────────────────────────
 const configPath = path.join(__dirname, '..', 'config', 'config.json');
-const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+const configDir = path.dirname(configPath);
+if (!fs.existsSync(configDir)) {
+  fs.mkdirSync(configDir, { recursive: true });
+}
+
+const defaultConfig = {
+  watchFolder: "./watched-folder",
+  channelNameTemplate: "『🎐』|{name}",
+  channelNameBoldStyle: true,
+  messageTemplate: "**{name}**\n🔗 Link: {link}\n🔑 Password: {password}\n**EDUCATIONAL PURPOSE ONLY**",
+  zipPasswordMode: "auto-random",
+  zipInputPassword: "",
+  uploadDelaySeconds: 8,
+  processingConcurrency: 2,
+  deleteEncryptedAfterUpload: true,
+  guiPort: 3737,
+  advancedTemplate: {
+    useEmbed: false,
+    color: 5814783,
+    authorName: "ZipBot",
+    authorIconUrl: "",
+    title: "StockZ",
+    description: "🔗 **Link:** {link}\n🔑 **Password:** `{password}`\n**EDUCATIONAL PURPOSES ONLY**\n\n**EDUCATIONAL PURPOSE ONLY**",
+    thumbnailUrl: "",
+    imageUrl: "",
+    bannerUrl: "",
+    footerText: "Delivered by ZipBot",
+    footerIconUrl: ""
+  },
+  downloadEngine: {
+    enabled: false,
+    sourceGuildId: "",
+    sourceChannelIds: [],
+    downloadFolder: "./downloads",
+    concurrentDownloads: 2,
+    retryCount: 3,
+    timeoutMs: 180000,
+    scanIntervalMinutes: 30
+  },
+  mirrorEngine: {
+    enabled: false,
+    userToken: "",
+    sourcePassword: "",
+    sourceGuildIds: [],
+    excludeGuildIds: [],
+    excludeChannelIds: [],
+    concurrency: 2,
+    channelTimeoutMs: 10000,
+    downloadTimeoutMs: 300000
+  }
+};
+
+let config = { ...defaultConfig };
+
+if (fs.existsSync(configPath)) {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    config = { ...defaultConfig, ...parsed };
+    if (parsed.advancedTemplate) config.advancedTemplate = { ...defaultConfig.advancedTemplate, ...parsed.advancedTemplate };
+    if (parsed.downloadEngine) config.downloadEngine = { ...defaultConfig.downloadEngine, ...parsed.downloadEngine };
+    if (parsed.mirrorEngine) config.mirrorEngine = { ...defaultConfig.mirrorEngine, ...parsed.mirrorEngine };
+  } catch (err) {
+    console.warn(`[index] Failed to parse config.json, using defaults: ${err.message}`);
+  }
+} else {
+  console.log('[index] config.json not found, using default configuration.');
+  try {
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+  } catch (err) {
+    console.warn(`[index] Could not write default config.json: ${err.message}`);
+  }
+}
 
 // Apply environment variable overrides (for cloud hosting)
 const envMap = {
@@ -80,13 +151,35 @@ const envMap = {
   MEGA_EMAIL: 'megaEmail',
   MEGA_PASSWORD: 'megaPassword',
   GUI_PORT: 'guiPort',
+  ZIP_INPUT_PASSWORD: 'zipInputPassword',
+  ZIP_PASSWORD_MODE: 'zipPasswordMode',
 };
+
 for (const [envKey, cfgKey] of Object.entries(envMap)) {
-  if (process.env[envKey] !== undefined) config[cfgKey] = process.env[envKey];
+  if (process.env[envKey] !== undefined) {
+    config[cfgKey] = process.env[envKey];
+  }
 }
-if (process.env.MIRROR_USER_TOKEN && config.mirrorEngine) {
+
+// Port override for Railway
+if (process.env.PORT !== undefined) {
+  config.guiPort = parseInt(process.env.PORT, 10);
+}
+
+// Mirror engine environment overrides
+if (process.env.MIRROR_ENABLED !== undefined) {
+  config.mirrorEngine.enabled = process.env.MIRROR_ENABLED === 'true';
+}
+if (process.env.MIRROR_USER_TOKEN !== undefined) {
   config.mirrorEngine.userToken = process.env.MIRROR_USER_TOKEN;
 }
+if (process.env.MIRROR_SOURCE_PASSWORD !== undefined) {
+  config.mirrorEngine.sourcePassword = process.env.MIRROR_SOURCE_PASSWORD;
+}
+if (process.env.MIRROR_SOURCE_GUILDS !== undefined) {
+  config.mirrorEngine.sourceGuildIds = process.env.MIRROR_SOURCE_GUILDS.split(',').map(id => id.trim()).filter(Boolean);
+}
+
 
 // ── Folder paths ───────────────────────────────────────────────────────────────
 const watchFolderPath = path.resolve(__dirname, '..', config.watchFolder || './watched-folder');
